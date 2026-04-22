@@ -15,7 +15,7 @@ Current version: `0.1.0`
 Install it with `pip` from the repository root:
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/mi-erasmusmc/launch_pro
 cd launch_pro
 python3 -m pip install .
 ```
@@ -40,6 +40,7 @@ Register a project first:
 
 ```bash
 launch register MyProject ~/Documents/my-project - https://github.com/your-org/my-project
+launch register MyStudy ~/Documents/my-study ~/Documents/my-study/inst/shiny/App https://github.com/your-org/my-study
 ```
 
 Then open the main project folder:
