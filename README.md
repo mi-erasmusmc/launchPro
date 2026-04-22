@@ -17,18 +17,39 @@ Install it with `pip` from the repository root:
 ```bash
 git clone https://github.com/mi-erasmusmc/launchPro
 cd launchPro
-python3 -m pip install --user .
+python3 -m pip install .
 ```
 
 This installs a terminal command named `launch`. After installation, run `launch` from any directory in the same Python environment.
 
-If you want `launch` to be available in every terminal session after a user install, add your Python user scripts directory to `PATH`:
+If your terminal cannot find `launch`, add the Python scripts directory to `PATH`.
 
-- macOS: add the user scripts directory, typically `~/Library/Python/<python-version>/bin`, to your shell startup file.
-- Linux: add the user scripts directory, typically `~/.local/bin`, to your shell startup file.
-- Windows: add the Python user scripts directory, typically under `%APPDATA%\Python\Python<version>\Scripts`, to your user `PATH` environment variable.
+- macOS:
 
-After updating `PATH`, restart your terminal and verify that `launch --help` works.
+```bash
+echo 'export PATH="$HOME/Library/Python/3.9/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+rehash
+```
+
+- Linux:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+hash -r
+```
+
+- Windows:
+
+Add `%APPDATA%\Python\Python39\Scripts` to your user `Path`, then open a new terminal.
+
+Then verify:
+
+```bash
+command -v launch
+launch --help
+```
 
 The CLI creates its runtime `projects.json` on first use in the standard per-user app-data location:
 
