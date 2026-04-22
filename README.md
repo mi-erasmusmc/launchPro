@@ -8,7 +8,7 @@ Current version: `0.1.0`
 
 - Python 3.9 or newer
 - A local project folder containing exactly one `.Rproj` file
-- macOS, Linux, or Windows
+- Windows, macOS or Linux
 
 ## Setup
 
@@ -33,9 +33,10 @@ If your terminal cannot find `launch`, add the Python scripts directory to `PATH
 
 The CLI creates its runtime `projects.json` on first use in the standard per-user app-data location:
 
+- Windows: `%LOCALAPPDATA%\\launch_pro\\projects.json`
 - macOS: `~/Library/Application Support/launch_pro/projects.json`
 - Linux: `${XDG_DATA_HOME:-~/.local/share}/launch_pro/projects.json`
-- Windows: `%LOCALAPPDATA%\\launch_pro\\projects.json`
+
 
 ## Run the CLI
 
