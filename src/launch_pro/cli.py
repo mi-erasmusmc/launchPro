@@ -114,9 +114,33 @@ def resolve_rproj(target_folder: Path, label: str) -> Path:
   return project_files[0]
 
 
-def launch_project(project: Project, open_project: bool, open_shiny: bool, open_github: bool) -> int:
+def open_terminal(target_folder: Path) -> None:
+  """Opens the target folder in a new terminal window."""
+  target_str = str(target_folder.resolve())
+  if sys.platform == "darwin":
+    # macOS: Use AppleScript to tell Terminal to run a command
+    script = f'tell application "Terminal" to do script "cd \'{target_str}\'"'
+    subprocess.run(["osascript", "-e", script], check=
+                   True)
+  elif os.name == "nt":
+    # Windows: Open a new cmd window and stay open
+    subprocess.run(["cmd", "/c", "start", "cmd", "/K", f"cd /d \"{target_str}\""],
+                   check=True)
+  else:
+    # Linux: Attempt to use gnome-terminal (common)
+    try:
+      subprocess.run(["gnome-terminal", "--working-directory", target_str],
+                     check=True)
+    except FileNotFoundError:
+      # Fallback to default terminal if gnome-terminal is not available
+      print("Warning: gnome-terminal not found. Could not open terminal.",
+            file=sys.stderr)
+
+
+
+def launch_project(project: Project, open_project: bool, open_shiny: bool, open_github: bool, open_terminal: bool) -> int:
   status = 0
-  if not any([open_project, open_shiny, open_github]):
+  if not any([open_project, open_shiny, open_github, open_terminal]):
     open_project = True
 
   if open_project:
@@ -147,6 +171,14 @@ def launch_project(project: Project, open_project: bool, open_shiny: bool, open_
       print(f"Error: {exc}", file=sys.stderr)
       status = 1
 
+  if open_terminal:
+    try:
+      print(f"Opening terminal for {project.name}")
+      open_terminal(project.base_folder)
+    except Exception as exc:
+      print(f"Error: {exc}", file=sys.stderr)
+      status = 1
+
   return status
 
 
@@ -159,6 +191,7 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument("-p", "--project-folder", action="store_true", dest="open_project")
   parser.add_argument("-s", "--shiny", action="store_true", dest="open_shiny")
   parser.add_argument("-g", "--github", action="store_true", dest="open_github")
+  parser.add_argument("-t", "--terminal", action="store_true", dest="open_terminal")
   return parser
 
 
@@ -215,7 +248,7 @@ def run(argv: Optional[list[str]] = None) -> int:
     else:
       print("No projects are registered yet. Use 'launch register ...' first.", file=sys.stderr)
     return 1
-  return launch_project(project, args.open_project, args.open_shiny, args.open_github)
+  return launch_project(project, args.open_project, args.open_shiny, args.open_github, args.open_terminal)
 
 
 def main() -> None:
