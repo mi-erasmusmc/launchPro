@@ -138,9 +138,9 @@ def open_terminal(target_folder: Path) -> None:
 
 
 
-def launch_project(project: Project, open_project: bool, open_shiny: bool, open_github: bool, open_terminal: bool) -> int:
+def launch_project(project: Project, open_project: bool, open_shiny: bool, open_github: bool, should_open_terminal: bool) -> int:
   status = 0
-  if not any([open_project, open_shiny, open_github, open_terminal]):
+  if not any([open_project, open_shiny, open_github, should_open_terminal]):
     open_project = True
 
   if open_project:
@@ -171,7 +171,7 @@ def launch_project(project: Project, open_project: bool, open_shiny: bool, open_
       print(f"Error: {exc}", file=sys.stderr)
       status = 1
 
-  if open_terminal:
+  if should_open_terminal:
     try:
       print(f"Opening terminal for {project.name}")
       open_terminal(project.base_folder)
