@@ -220,7 +220,7 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument("-s", "--shiny", action="store_true", dest="open_shiny")
   parser.add_argument("-g", "--github", action="store_true", dest="open_github")
   parser.add_argument("-t", "--terminal", action="store_true", dest="open_terminal")
-  return parser
+  parser.add_argument("-f", "--folder-in-terminal", action="store_true", dest="open_terminal")
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
