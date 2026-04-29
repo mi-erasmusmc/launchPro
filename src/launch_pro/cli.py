@@ -114,9 +114,61 @@ def resolve_rproj(target_folder: Path, label: str) -> Path:
   return project_files[0]
 
 
-def launch_project(project: Project, open_project: bool, open_shiny: bool, open_github: bool) -> int:
+def open_terminal(target_folder: Path) -> None:
+  """Opens the target folder in a terminal window (attempting to use the current one)."""
+  target_str = str(target_folder.resolve())
+  if sys.platform == "darwin":
+    # macOS: Try to hijack the frontmost window in Terminal or iTerm2
+    # 1. Try Terminal.app
+    try:
+      script = f'tell application "Terminal" to do script "cd \'{target_str}\'" in front window'
+      subprocess.run(["osascript", "-e", script], check=True)
+      return
+    except (subprocess.CalledProcessError, FileNotFoundError):
+      pass
+
+    # 2. Try iTerm2
+    try:
+      script = f'tell application "iTerm2" to tell current session of front window to write text "cd \'{target_str}\'"'
+      subprocess.run(["osascript", "-e", script], check=True)
+      return
+    except (subprocess.CalledProcessError, FileNotFoundError):
+      pass
+
+    # 3. Fallback to new window
+    script = f'tell application "Terminal" to do script "cd \'{target_str}\'"'
+    subprocess.run(["osascript", "-e", script], check=True)
+
+  elif os.name == "nt":
+    # Windows: Try Windows Terminal (wt.exe) if available, else fallback to cmd
+    wt_path = subprocess.run(["where", "wt.exe"], capture_output=True, text=True).stdout.strip()
+    if wt_path:
+      subprocess.run(["wt.exe", "-d", target_str], check=True)
+    else:
+      # Fallback to default cmd window
+      subprocess.run(["cmd", "/c", "start", "cmd", "/K", f"cd /d \"{target_str}\""],
+                     check=True)
+  else:
+    # Linux: Iterate through a list of common terminals
+    terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "alacritty", "kitty"]
+    success = False
+    for term in terminals:
+      try:
+        subprocess.run([term, "--working-directory", target_str], check=True)
+        success = True
+        break
+      except (FileNotFoundError, subprocess.CalledProcessError):
+        continue
+
+    if not success:
+      print(f"Warning: Could not find a compatible terminal from {terminals}.",
+            file=sys.stderr)
+
+
+
+def launch_project(project: Project, open_project: bool, open_shiny: bool, open_github: bool, should_open_terminal: bool) -> int:
   status = 0
-  if not any([open_project, open_shiny, open_github]):
+  if not any([open_project, open_shiny, open_github, should_open_terminal]):
     open_project = True
 
   if open_project:
@@ -147,6 +199,14 @@ def launch_project(project: Project, open_project: bool, open_shiny: bool, open_
       print(f"Error: {exc}", file=sys.stderr)
       status = 1
 
+  if should_open_terminal:
+    try:
+      print(f"Opening terminal for {project.name}")
+      open_terminal(project.base_folder)
+    except Exception as exc:
+      print(f"Error: {exc}", file=sys.stderr)
+      status = 1
+
   return status
 
 
@@ -159,7 +219,8 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument("-p", "--project-folder", action="store_true", dest="open_project")
   parser.add_argument("-s", "--shiny", action="store_true", dest="open_shiny")
   parser.add_argument("-g", "--github", action="store_true", dest="open_github")
-  return parser
+  parser.add_argument("-t", "--terminal", action="store_true", dest="open_terminal")
+  parser.add_argument("-f", "--folder-in-terminal", action="store_true", dest="open_terminal")
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -215,7 +276,7 @@ def run(argv: Optional[list[str]] = None) -> int:
     else:
       print("No projects are registered yet. Use 'launch register ...' first.", file=sys.stderr)
     return 1
-  return launch_project(project, args.open_project, args.open_shiny, args.open_github)
+  return launch_project(project, args.open_project, args.open_shiny, args.open_github, args.open_terminal)
 
 
 def main() -> None:
