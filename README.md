@@ -12,22 +12,30 @@ Current version: `0.1.0`
 
 ## Setup
 
-Install it with `pip` from the repository root:
+The recommended way to install `launchPro` is using `pipx`, which installs the package in an isolated environment and automatically manages your `PATH`.
+
+### Using pipx (Recommended)
 
 ```bash
 git clone https://github.com/mi-erasmusmc/launchPro
 cd launchPro
-python3 -m pip install .
+pipx install .
 ```
 
-This installs a terminal command named `launch`. After installation, run `launch` from any directory in the same Python environment.
+### Using pip (Alternative)
+
+If you prefer using `pip`, you can install it directly, but you may need to manually add the Python scripts directory to your `PATH`.
+
+```bash
+python3 -m pip install .
+```
 
 If your terminal cannot find `launch`, add the Python scripts directory to `PATH`:
 
 - Windows:
   Run `py -m site --user-base`, append `\Python39\Scripts` to the returned path, add that folder to your user `Path`, then open a new terminal.
 - macOS:
-  Add `~/Library/Python/3.9/bin` to your shell `PATH`, restart the terminal, and verify with `launch --help`.
+  Add `~/Library/Python/3.x/bin` to your shell `PATH`, restart the terminal, and verify with `launch --help`.
 - Linux:
   Add `~/.local/bin` to your shell `PATH`, restart the terminal, and verify with `launch --help`.
 
