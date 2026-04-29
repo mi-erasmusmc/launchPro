@@ -115,25 +115,53 @@ def resolve_rproj(target_folder: Path, label: str) -> Path:
 
 
 def open_terminal(target_folder: Path) -> None:
-  """Opens the target folder in a new terminal window."""
+  """Opens the target folder in a terminal window (attempting to use the current one)."""
   target_str = str(target_folder.resolve())
   if sys.platform == "darwin":
-    # macOS: Use AppleScript to tell Terminal to run a command
-    script = f'tell application "Terminal" to do script "cd \'{target_str}\'"'
-    subprocess.run(["osascript", "-e", script], check=
-                   True)
-  elif os.name == "nt":
-    # Windows: Open a new cmd window and stay open
-    subprocess.run(["cmd", "/c", "start", "cmd", "/K", f"cd /d \"{target_str}\""],
-                   check=True)
-  else:
-    # Linux: Attempt to use gnome-terminal (common)
+    # macOS: Try to hijack the frontmost window in Terminal or iTerm2
+    # 1. Try Terminal.app
     try:
-      subprocess.run(["gnome-terminal", "--working-directory", target_str],
+      script = f'tell application "Terminal" to do script "cd \'{target_str}\'" in front window'
+      subprocess.run(["osascript", "-e", script], check=True)
+      return
+    except (subprocess.CalledProcessError, FileNotFoundError):
+      pass
+
+    # 2. Try iTerm2
+    try:
+      script = f'tell application "iTerm2" to tell current session of front window to write text "cd \'{target_str}\'"'
+      subprocess.run(["osascript", "-e", script], check=True)
+      return
+    except (subprocess.CalledProcessError, FileNotFoundError):
+      pass
+
+    # 3. Fallback to new window
+    script = f'tell application "Terminal" to do script "cd \'{target_str}\'"'
+    subprocess.run(["osascript", "-e", script], check=True)
+
+  elif os.name == "nt":
+    # Windows: Try Windows Terminal (wt.exe) if available, else fallback to cmd
+    wt_path = subprocess.run(["where", "wt.exe"], capture_output=True, text=True).stdout.strip()
+    if wt_path:
+      subprocess.run(["wt.exe", "-d", target_str], check=True)
+    else:
+      # Fallback to default cmd window
+      subprocess.run(["cmd", "/c", "start", "cmd", "/K", f"cd /d \"{target_str}\""],
                      check=True)
-    except FileNotFoundError:
-      # Fallback to default terminal if gnome-terminal is not available
-      print("Warning: gnome-terminal not found. Could not open terminal.",
+  else:
+    # Linux: Iterate through a list of common terminals
+    terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "alacritty", "kitty"]
+    success = False
+    for term in terminals:
+      try:
+        subprocess.run([term, "--working-directory", target_str], check=True)
+        success = True
+        break
+      except (FileNotFoundError, subprocess.CalledProcessError):
+        continue
+
+    if not success:
+      print(f"Warning: Could not find a compatible terminal from {terminals}.",
             file=sys.stderr)
 
 
