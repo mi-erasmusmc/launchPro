@@ -8,7 +8,7 @@ Current version: `0.1.0`
 
 - Python 3.9 or newer
 - A local project folder containing exactly one `.Rproj` file
-- macOS, Linux, or Windows
+- Windows, macOS or Linux
 
 ## Setup
 
@@ -22,40 +22,21 @@ python3 -m pip install .
 
 This installs a terminal command named `launch`. After installation, run `launch` from any directory in the same Python environment.
 
-If your terminal cannot find `launch`, add the Python scripts directory to `PATH`.
-
-- macOS:
-
-```bash
-echo 'export PATH="$HOME/Library/Python/3.9/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-rehash
-```
-
-- Linux:
-
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-hash -r
-```
+If your terminal cannot find `launch`, add the Python scripts directory to `PATH`:
 
 - Windows:
-
-Add `%APPDATA%\Python\Python39\Scripts` to your user `Path`, then open a new terminal.
-
-Then verify:
-
-```bash
-command -v launch
-launch --help
-```
+  Run `py -m site --user-base`, append `\Python39\Scripts` to the returned path, add that folder to your user `Path`, then open a new terminal.
+- macOS:
+  Add `~/Library/Python/3.9/bin` to your shell `PATH`, restart the terminal, and verify with `launch --help`.
+- Linux:
+  Add `~/.local/bin` to your shell `PATH`, restart the terminal, and verify with `launch --help`.
 
 The CLI creates its runtime `projects.json` on first use in the standard per-user app-data location:
 
+- Windows: `%LOCALAPPDATA%\\launch_pro\\projects.json`
 - macOS: `~/Library/Application Support/launch_pro/projects.json`
 - Linux: `${XDG_DATA_HOME:-~/.local/share}/launch_pro/projects.json`
-- Windows: `%LOCALAPPDATA%\\launch_pro\\projects.json`
+
 
 ## Run the CLI
 
