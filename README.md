@@ -2,7 +2,7 @@
 
 `launchPro` is a small Python CLI for opening local RStudio projects, optional Shiny project folders, and project GitHub pages from a single command.
 
-Current version: `0.1.0`
+Current version: `0.1.1`
 
 ## Requirements
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "launch-pro"
-version = "0.1.0"
+version = "0.1.1"
 description = "CLI for opening local RStudio projects, Shiny apps, and GitHub pages."
 readme = "README.md"
 requires-python = ">=3.9"
