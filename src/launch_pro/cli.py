@@ -221,6 +221,7 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument("-g", "--github", action="store_true", dest="open_github")
   parser.add_argument("-t", "--terminal", action="store_true", dest="open_terminal")
   parser.add_argument("-f", "--folder-in-terminal", action="store_true", dest="open_terminal")
+  return parser
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -281,3 +282,6 @@ def run(argv: Optional[list[str]] = None) -> int:
 
 def main() -> None:
   raise SystemExit(run())
+
+if __name__ == "__main__":
+  main()
