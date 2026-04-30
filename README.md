@@ -22,30 +22,6 @@ cd launchPro
 pipx install .
 ```
 
-### Using pip (Alternative)
-
-If you prefer using `pip`, you can install it directly, but you may need to manually add the Python scripts directory to your `PATH`.
-
-```bash
-python3 -m pip install .
-```
-
-If your terminal cannot find `launch`, add the Python scripts directory to `PATH`:
-
-- Windows:
-  Run `py -m site --user-base`, append `\Python39\Scripts` to the returned path, add that folder to your user `Path`, then open a new terminal.
-- macOS:
-  Add `~/Library/Python/3.x/bin` to your shell `PATH`, restart the terminal, and verify with `launch --help`.
-- Linux:
-  Add `~/.local/bin` to your shell `PATH`, restart the terminal, and verify with `launch --help`.
-
-The CLI creates its runtime `projects.json` on first use in the standard per-user app-data location:
-
-- Windows: `%LOCALAPPDATA%\\launch_pro\\projects.json`
-- macOS: `~/Library/Application Support/launch_pro/projects.json`
-- Linux: `${XDG_DATA_HOME:-~/.local/share}/launch_pro/projects.json`
-
-
 ## Run the CLI
 
 Show help:
