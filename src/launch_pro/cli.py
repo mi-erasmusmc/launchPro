@@ -136,6 +136,14 @@ def resolve_project_application(project: Project, requested_app: Optional[str]) 
   return requested_app or project.default_app or DEFAULT_PROJECT_APPLICATION
 
 
+def resolve_project_target(target_folder: Path, label: str, application: str) -> Path:
+  if application == "positron":
+    if not target_folder.is_dir():
+      raise ValueError(f"Could not find {label} folder at {target_folder}")
+    return target_folder.resolve()
+  return resolve_rproj(target_folder, label)
+
+
 def resolve_rproj(target_folder: Path, label: str) -> Path:
   if not target_folder.is_dir():
     raise ValueError(f"Could not find {label} folder at {target_folder}")
@@ -285,9 +293,9 @@ def launch_project(project: Project,
 
   if open_project:
     try:
-      rproj = resolve_rproj(project.base_folder, "project")
+      target = resolve_project_target(project.base_folder, "project", project_application)
       print(f"Launching {project.name} project in {project_application}")
-      open_project_target(rproj, project_application)
+      open_project_target(target, project_application)
     except Exception as exc:
       print(f"Error: {exc}", file=sys.stderr)
       status = 1
@@ -296,9 +304,9 @@ def launch_project(project: Project,
     try:
       if not project.shiny_folder:
         raise ValueError(f"No shiny project configured for {project.name}")
-      rproj = resolve_rproj(project.shiny_folder, "shiny project")
+      target = resolve_project_target(project.shiny_folder, "shiny project", project_application)
       print(f"Launching {project.name} shiny project in {project_application}")
-      open_project_target(rproj, project_application)
+      open_project_target(target, project_application)
     except Exception as exc:
       print(f"Error: {exc}", file=sys.stderr)
       status = 1

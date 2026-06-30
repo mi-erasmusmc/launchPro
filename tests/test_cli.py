@@ -38,8 +38,6 @@ class CliApplicationTests(unittest.TestCase):
     with tempfile.TemporaryDirectory() as tmpdir:
       project_dir = Path(tmpdir) / "DemoProject"
       project_dir.mkdir()
-      rproj_path = project_dir / "demo.Rproj"
-      rproj_path.touch()
       projects_path = Path(tmpdir) / "projects.json"
       projects_path.write_text(
         json.dumps(
@@ -66,7 +64,7 @@ class CliApplicationTests(unittest.TestCase):
             status = cli.run(["Demo", "-p"])
 
       self.assertEqual(status, 0)
-      self.assertEqual(commands[0], self.expected_command("positron", rproj_path.resolve()))
+      self.assertEqual(commands[0], self.expected_command("positron", project_dir.resolve()))
 
   def test_run_uses_rstudio_when_requested(self) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -135,6 +133,108 @@ class CliApplicationTests(unittest.TestCase):
 
       self.assertEqual(status, 0)
       self.assertEqual(commands[0], self.expected_command("rstudio", rproj_path.resolve()))
+
+  def test_run_uses_positron_without_rproj(self) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+      project_dir = Path(tmpdir) / "DemoProject"
+      project_dir.mkdir()
+      projects_path = Path(tmpdir) / "projects.json"
+      projects_path.write_text(
+        json.dumps(
+          {
+            "Demo": {
+              "base_folder": str(project_dir),
+              "shiny_folder": None,
+              "github_url": "https://example.com/demo",
+              "default_app": None,
+            }
+          }
+        ),
+        encoding="utf-8",
+      )
+      commands = []
+
+      def fake_run(command, check=True, **kwargs):
+        commands.append(command)
+        return None
+
+      with patch.object(cli, "projects_file", return_value=projects_path):
+        with patch.object(cli.subprocess, "run", side_effect=fake_run):
+          with patch.object(cli.shutil, "which", side_effect=lambda value: f"/mock/{value}"):
+            status = cli.run(["Demo", "-p"])
+
+      self.assertEqual(status, 0)
+      self.assertEqual(commands[0], self.expected_command("positron", project_dir.resolve()))
+
+  def test_run_uses_positron_shiny_folder(self) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+      project_dir = Path(tmpdir) / "DemoProject"
+      project_dir.mkdir()
+      shiny_dir = project_dir / "inst" / "shiny" / "App"
+      shiny_dir.mkdir(parents=True)
+      projects_path = Path(tmpdir) / "projects.json"
+      projects_path.write_text(
+        json.dumps(
+          {
+            "Demo": {
+              "base_folder": str(project_dir),
+              "shiny_folder": str(shiny_dir),
+              "github_url": "https://example.com/demo",
+              "default_app": None,
+            }
+          }
+        ),
+        encoding="utf-8",
+      )
+      commands = []
+
+      def fake_run(command, check=True, **kwargs):
+        commands.append(command)
+        return None
+
+      with patch.object(cli, "projects_file", return_value=projects_path):
+        with patch.object(cli.subprocess, "run", side_effect=fake_run):
+          with patch.object(cli.shutil, "which", side_effect=lambda value: f"/mock/{value}"):
+            status = cli.run(["Demo", "-s"])
+
+      self.assertEqual(status, 0)
+      self.assertEqual(commands[0], self.expected_command("positron", shiny_dir.resolve()))
+
+  def test_run_uses_rstudio_shiny_rproj(self) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+      project_dir = Path(tmpdir) / "DemoProject"
+      project_dir.mkdir()
+      shiny_dir = project_dir / "inst" / "shiny" / "App"
+      shiny_dir.mkdir(parents=True)
+      shiny_rproj = shiny_dir / "demo-shiny.Rproj"
+      shiny_rproj.touch()
+      projects_path = Path(tmpdir) / "projects.json"
+      projects_path.write_text(
+        json.dumps(
+          {
+            "Demo": {
+              "base_folder": str(project_dir),
+              "shiny_folder": str(shiny_dir),
+              "github_url": "https://example.com/demo",
+              "default_app": "rstudio",
+            }
+          }
+        ),
+        encoding="utf-8",
+      )
+      commands = []
+
+      def fake_run(command, check=True, **kwargs):
+        commands.append(command)
+        return None
+
+      with patch.object(cli, "projects_file", return_value=projects_path):
+        with patch.object(cli.subprocess, "run", side_effect=fake_run):
+          with patch.object(cli.shutil, "which", side_effect=lambda value: f"/mock/{value}"):
+            status = cli.run(["Demo", "-s"])
+
+      self.assertEqual(status, 0)
+      self.assertEqual(commands[0], self.expected_command("rstudio", shiny_rproj.resolve()))
 
   def test_open_terminal_uses_frontmost_terminal_on_macos(self) -> None:
     target = Path("/tmp/demo project")

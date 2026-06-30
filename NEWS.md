@@ -1,5 +1,11 @@
 # News
 
+## 0.1.5
+
+- Changed Positron launches to open the project folder itself as the workspace target instead of opening the `.Rproj` file.
+- Allowed Positron launches to work even when the target folder does not contain an `.Rproj` file.
+- Kept RStudio behavior unchanged, including the requirement that the target folder contains exactly one `.Rproj` file.
+
 ## 0.1.4
 
 - Changed `-t` on macOS to target the active terminal app instead of falling back to `Terminal.app`.
