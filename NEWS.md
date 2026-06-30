@@ -2,7 +2,8 @@
 
 ## 0.1.3
 
-- Added `--application` to choose `positron` or `rstudio` for project and Shiny launches, with `positron` as the default.
+- Added `--app` to choose `positron` or `rstudio` for project and Shiny launches.
+- Added project registration support for saving a per-project default app, with `positron` as the fallback when none is configured.
 
 ## 0.1.2
 

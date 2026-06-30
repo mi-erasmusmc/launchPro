@@ -53,6 +53,7 @@ class Project:
   base_folder: Path
   shiny_folder: Optional[Path]
   github_url: str
+  default_app: Optional[str]
 
   @classmethod
   def from_dict(cls, name: str, payload: Dict[str, Any]) -> "Project":
@@ -62,6 +63,7 @@ class Project:
       base_folder=expand_path(payload["base_folder"]),
       shiny_folder=expand_path(shiny_folder) if shiny_folder else None,
       github_url=payload["github_url"],
+      default_app=payload.get("default_app"),
     )
 
   def to_dict(self) -> Dict[str, Optional[str]]:
@@ -69,6 +71,7 @@ class Project:
       "base_folder": str(self.base_folder),
       "shiny_folder": str(self.shiny_folder) if self.shiny_folder else None,
       "github_url": self.github_url,
+      "default_app": self.default_app,
     }
 
 
@@ -124,6 +127,10 @@ def project_application_command(application: str) -> list[str]:
 
 def open_project_target(target: Path, application: str) -> None:
   subprocess.run([*project_application_command(application), str(target)], check=True)
+
+
+def resolve_project_application(project: Project, requested_app: Optional[str]) -> str:
+  return requested_app or project.default_app or DEFAULT_PROJECT_APPLICATION
 
 
 def resolve_rproj(target_folder: Path, label: str) -> Path:
@@ -251,11 +258,11 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument("-f", "--folder-in-terminal", action="store_true", dest="open_terminal")
   parser.add_argument(
     "-a",
-    "--application",
+    "--app",
     choices=sorted(PROJECT_APPLICATION_COMMANDS),
-    default=DEFAULT_PROJECT_APPLICATION,
+    default=None,
     dest="project_application",
-    help="Application used to open project files. Defaults to positron.",
+    help="Application used to open project files. Defaults to the registered app or positron.",
   )
   return parser
 
@@ -270,6 +277,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("base_folder")
     parser.add_argument("shiny_folder", help="Use '-' when the project has no Shiny folder.")
     parser.add_argument("github_url")
+    parser.add_argument(
+      "--app",
+      choices=sorted(PROJECT_APPLICATION_COMMANDS),
+      dest="default_app",
+      help="Default application for this project.",
+    )
     namespace = parser.parse_args(argv[1:])
     namespace.command = "register"
     return namespace
@@ -290,6 +303,7 @@ def register_project(registry: ProjectRegistry, args: argparse.Namespace) -> int
     base_folder=expand_path(args.base_folder),
     shiny_folder=shiny_folder,
     github_url=args.github_url,
+    default_app=args.default_app,
   )
   projects[project.name] = project
   registry.save(projects)
@@ -313,13 +327,14 @@ def run(argv: Optional[list[str]] = None) -> int:
     else:
       print("No projects are registered yet. Use 'launch register ...' first.", file=sys.stderr)
     return 1
+  project_application = resolve_project_application(project, args.project_application)
   return launch_project(
     project,
     args.open_project,
     args.open_shiny,
     args.open_github,
     args.open_terminal,
-    args.project_application,
+    project_application,
   )
 
 

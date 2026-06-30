@@ -58,7 +58,7 @@ Register a project first:
 
 ```bash
 launch register MyProject ~/Documents/my-project - https://github.com/your-org/my-project
-launch register MyStudy ~/Documents/my-study ~/Documents/my-study/inst/shiny/App https://github.com/your-org/my-study
+launch register MyStudy ~/Documents/my-study ~/Documents/my-study/inst/shiny/App https://github.com/your-org/my-study --app rstudio
 ```
 
 Then open the main project folder:
@@ -70,7 +70,7 @@ launch MyProject -p
 Open the same project in RStudio:
 
 ```bash
-launch MyProject -p --application rstudio
+launch MyProject -p --app rstudio
 ```
 
 Open the Shiny project and GitHub page:
@@ -79,13 +79,13 @@ Open the Shiny project and GitHub page:
 launch MyStudy -s -g
 ```
 
-If no flag is provided, `launch` opens the main project in Positron by default:
+If no flag is provided, `launch` uses the registered app for that project, or Positron when no project default was saved:
 
 ```bash
 launch MyProject
 ```
 
-Choose the project application explicitly with `--application positron` or `--application rstudio`.
+Choose the project application explicitly with `--app positron` or `--app rstudio`.
 
 ## Register a New Project
 
@@ -93,6 +93,12 @@ Add or update a project entry in the app-data `projects.json`:
 
 ```bash
 launch register MyProject ~/Documents/my-project - https://github.com/your-org/my-project
+```
+
+Save a default project application while registering:
+
+```bash
+launch register MyProject ~/Documents/my-project - https://github.com/your-org/my-project --app rstudio
 ```
 
 Use `-` when the project does not have a Shiny folder. If it does, pass the Shiny directory instead:
