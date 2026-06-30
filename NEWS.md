@@ -1,5 +1,11 @@
 # News
 
+## 0.1.4
+
+- Changed `-t` on macOS to target the active terminal app instead of falling back to `Terminal.app`.
+- Added explicit macOS support for `Alacritty` terminal launches, including an `alacritty msg create-window` fallback when direct window control is unavailable.
+- Documented terminal behavior updates and added CLI coverage for the macOS terminal dispatch logic.
+
 ## 0.1.3
 
 - Added `--app` to choose `positron` or `rstudio` for project and Shiny launches.

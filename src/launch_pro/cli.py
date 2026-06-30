@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -19,6 +20,8 @@ PROJECT_APPLICATION_COMMANDS = {
   "positron": ("positron", "Positron"),
   "rstudio": ("rstudio", "RStudio"),
 }
+LINUX_TERMINALS = ("gnome-terminal", "konsole", "xfce4-terminal", "alacritty", "kitty")
+MACOS_TERMINALS = ("Terminal", "iTerm2", "Alacritty")
 
 DEFAULT_PROJECTS: Dict[str, Dict[str, Optional[str]]] = {}
 
@@ -144,55 +147,129 @@ def resolve_rproj(target_folder: Path, label: str) -> Path:
   return project_files[0]
 
 
-def open_terminal(target_folder: Path) -> None:
-  """Opens the target folder in a terminal window (attempting to use the current one)."""
+def shell_cd_command(target_folder: Path) -> str:
+  return f"cd {shlex.quote(str(target_folder.resolve()))}"
+
+
+def apple_script_string(value: str) -> str:
+  return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def run_osascript(script: str, capture_output: bool = False) -> subprocess.CompletedProcess[str]:
+  return subprocess.run(
+    ["osascript", "-e", script],
+    check=True,
+    capture_output=capture_output,
+    text=capture_output,
+  )
+
+
+def frontmost_macos_application() -> str:
+  script = 'tell application "System Events" to get name of first application process whose frontmost is true'
+  result = run_osascript(script, capture_output=True)
+  app_name = result.stdout.strip()
+  if not app_name:
+    raise ValueError("Could not determine the active macOS application")
+  return app_name
+
+
+def normalize_macos_application_name(app_name: str) -> str:
+  return app_name.strip().casefold()
+
+
+def open_terminal_macos_terminal(target_folder: Path) -> None:
+  command = apple_script_string(shell_cd_command(target_folder))
+  script = (
+    'tell application "Terminal"\n'
+    "activate\n"
+    "if not (exists front window) then reopen\n"
+    f'do script "{command}" in selected tab of front window\n'
+    "end tell"
+  )
+  run_osascript(script)
+
+
+def open_terminal_macos_iterm2(target_folder: Path) -> None:
+  command = apple_script_string(shell_cd_command(target_folder))
+  script = (
+    'tell application "iTerm2"\n'
+    "activate\n"
+    "if not (exists current window) then create window with default profile\n"
+    f'tell current session of current window to write text "{command}"\n'
+    "end tell"
+  )
+  run_osascript(script)
+
+
+def open_terminal_macos_alacritty(target_folder: Path) -> None:
+  command = apple_script_string(shell_cd_command(target_folder))
+  script = (
+    'tell application "Alacritty" to activate\n'
+    'tell application "System Events"\n'
+    f'keystroke "{command}"\n'
+    "key code 36\n"
+    "end tell"
+  )
+  try:
+    run_osascript(script)
+  except subprocess.CalledProcessError:
+    subprocess.run(
+      ["alacritty", "msg", "create-window", "--working-directory", str(target_folder.resolve())],
+      check=True,
+    )
+
+
+def open_terminal_macos(target_folder: Path) -> None:
+  app_name = frontmost_macos_application()
+  normalized_name = normalize_macos_application_name(app_name)
+  if normalized_name == "terminal":
+    open_terminal_macos_terminal(target_folder)
+    return
+  if normalized_name == "iterm2":
+    open_terminal_macos_iterm2(target_folder)
+    return
+  if normalized_name == "alacritty":
+    open_terminal_macos_alacritty(target_folder)
+    return
+  supported = ", ".join(MACOS_TERMINALS)
+  raise ValueError(
+    f"Active macOS application '{app_name}' is not a supported terminal for -t. "
+    f"Supported terminals: {supported}"
+  )
+
+
+def open_terminal_windows(target_folder: Path) -> None:
   target_str = str(target_folder.resolve())
+  wt_path = subprocess.run(["where", "wt.exe"], capture_output=True, text=True).stdout.strip()
+  if wt_path:
+    subprocess.run(["wt.exe", "-d", target_str], check=True)
+    return
+  subprocess.run(["cmd", "/c", "start", "cmd", "/K", f'cd /d "{target_str}"'], check=True)
+
+
+def open_terminal_linux(target_folder: Path) -> None:
+  target_str = str(target_folder.resolve())
+  for term in LINUX_TERMINALS:
+    try:
+      subprocess.run([term, "--working-directory", target_str], check=True)
+      return
+    except (FileNotFoundError, subprocess.CalledProcessError):
+      continue
+  print(
+    f"Warning: Could not find a compatible terminal from {list(LINUX_TERMINALS)}.",
+    file=sys.stderr,
+  )
+
+
+def open_terminal(target_folder: Path) -> None:
+  """Open the target folder in the current terminal app when possible."""
   if sys.platform == "darwin":
-    # macOS: Try to hijack the frontmost window in Terminal or iTerm2
-    # 1. Try Terminal.app
-    try:
-      script = f'tell application "Terminal" to do script "cd \'{target_str}\'" in front window'
-      subprocess.run(["osascript", "-e", script], check=True)
-      return
-    except (subprocess.CalledProcessError, FileNotFoundError):
-      pass
-
-    # 2. Try iTerm2
-    try:
-      script = f'tell application "iTerm2" to tell current session of front window to write text "cd \'{target_str}\'"'
-      subprocess.run(["osascript", "-e", script], check=True)
-      return
-    except (subprocess.CalledProcessError, FileNotFoundError):
-      pass
-
-    # 3. Fallback to new window
-    script = f'tell application "Terminal" to do script "cd \'{target_str}\'"'
-    subprocess.run(["osascript", "-e", script], check=True)
-
-  elif os.name == "nt":
-    # Windows: Try Windows Terminal (wt.exe) if available, else fallback to cmd
-    wt_path = subprocess.run(["where", "wt.exe"], capture_output=True, text=True).stdout.strip()
-    if wt_path:
-      subprocess.run(["wt.exe", "-d", target_str], check=True)
-    else:
-      # Fallback to default cmd window
-      subprocess.run(["cmd", "/c", "start", "cmd", "/K", f"cd /d \"{target_str}\""],
-                     check=True)
-  else:
-    # Linux: Iterate through a list of common terminals
-    terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "alacritty", "kitty"]
-    success = False
-    for term in terminals:
-      try:
-        subprocess.run([term, "--working-directory", target_str], check=True)
-        success = True
-        break
-      except (FileNotFoundError, subprocess.CalledProcessError):
-        continue
-
-    if not success:
-      print(f"Warning: Could not find a compatible terminal from {terminals}.",
-            file=sys.stderr)
+    open_terminal_macos(target_folder)
+    return
+  if os.name == "nt":
+    open_terminal_windows(target_folder)
+    return
+  open_terminal_linux(target_folder)
 
 
 

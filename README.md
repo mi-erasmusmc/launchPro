@@ -2,7 +2,7 @@
 
 `launchPro` is a small Python CLI for opening local Positron or RStudio projects, optional Shiny project folders, and project GitHub pages from a single command.
 
-Current version: `0.1.3`
+Current version: `0.1.4`
 
 ## Requirements
 
@@ -79,6 +79,12 @@ Open the Shiny project and GitHub page:
 launch MyStudy -s -g
 ```
 
+Open the project folder in a terminal:
+
+```bash
+launch MyProject -t
+```
+
 If no flag is provided, `launch` uses the registered app for that project, or Positron when no project default was saved:
 
 ```bash
@@ -111,8 +117,11 @@ launch register MyStudy ~/Documents/my-study ~/Documents/my-study/inst/shiny/App
 
 - Paths may use `~` and environment variables.
 - The CLI fails if a target folder does not exist or contains zero or multiple `.Rproj` files.
+- On macOS, `-t` targets the active terminal app instead of falling back to `Terminal.app`. `Terminal`, `iTerm2`, and `Alacritty` are supported.
+- On macOS, the `Alacritty` path uses Accessibility-driven keystrokes for the active window and falls back to `alacritty msg create-window --working-directory ...` if needed.
 - On macOS it opens project files in the selected app with `open -a`.
 - On Linux and Windows it looks for the selected `positron` or `rstudio` executable in `PATH`.
+- On Linux, terminal detection includes `gnome-terminal`, `konsole`, `xfce4-terminal`, `alacritty`, and `kitty`.
 - For local development without installing, run `./launch ...` from the repository root.
 
 ## License
