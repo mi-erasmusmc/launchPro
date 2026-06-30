@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -13,6 +14,11 @@ from typing import Any, Dict, Optional
 APP_NAME = "launch_pro"
 PROJECTS_FILENAME = "projects.json"
 ENV_PROJECTS_FILE = "LAUNCH_PROJECTS_FILE"
+DEFAULT_PROJECT_APPLICATION = "positron"
+PROJECT_APPLICATION_COMMANDS = {
+  "positron": ("positron", "Positron"),
+  "rstudio": ("rstudio", "RStudio"),
+}
 
 DEFAULT_PROJECTS: Dict[str, Dict[str, Optional[str]]] = {}
 
@@ -103,6 +109,23 @@ def open_target(target: str) -> None:
   subprocess.run(["xdg-open", target], check=True)
 
 
+def project_application_command(application: str) -> list[str]:
+  candidates = PROJECT_APPLICATION_COMMANDS.get(application)
+  if not candidates:
+    raise ValueError(f"Unsupported project application: {application}")
+  if sys.platform == "darwin":
+    return ["open", "-a", candidates[-1]]
+  for candidate in candidates:
+    executable = shutil.which(candidate)
+    if executable:
+      return [executable]
+  raise ValueError(f"Could not find the {application} executable in PATH")
+
+
+def open_project_target(target: Path, application: str) -> None:
+  subprocess.run([*project_application_command(application), str(target)], check=True)
+
+
 def resolve_rproj(target_folder: Path, label: str) -> Path:
   if not target_folder.is_dir():
     raise ValueError(f"Could not find {label} folder at {target_folder}")
@@ -166,7 +189,12 @@ def open_terminal(target_folder: Path) -> None:
 
 
 
-def launch_project(project: Project, open_project: bool, open_shiny: bool, open_github: bool, should_open_terminal: bool) -> int:
+def launch_project(project: Project,
+                   open_project: bool,
+                   open_shiny: bool,
+                   open_github: bool,
+                   should_open_terminal: bool,
+                   project_application: str) -> int:
   status = 0
   if not any([open_project, open_shiny, open_github, should_open_terminal]):
     open_project = True
@@ -174,8 +202,8 @@ def launch_project(project: Project, open_project: bool, open_shiny: bool, open_
   if open_project:
     try:
       rproj = resolve_rproj(project.base_folder, "project")
-      print(f"Launching {project.name} project")
-      open_target(str(rproj))
+      print(f"Launching {project.name} project in {project_application}")
+      open_project_target(rproj, project_application)
     except Exception as exc:
       print(f"Error: {exc}", file=sys.stderr)
       status = 1
@@ -185,8 +213,8 @@ def launch_project(project: Project, open_project: bool, open_shiny: bool, open_
       if not project.shiny_folder:
         raise ValueError(f"No shiny project configured for {project.name}")
       rproj = resolve_rproj(project.shiny_folder, "shiny project")
-      print(f"Launching {project.name} shiny project")
-      open_target(str(rproj))
+      print(f"Launching {project.name} shiny project in {project_application}")
+      open_project_target(rproj, project_application)
     except Exception as exc:
       print(f"Error: {exc}", file=sys.stderr)
       status = 1
@@ -221,6 +249,14 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument("-g", "--github", action="store_true", dest="open_github")
   parser.add_argument("-t", "--terminal", action="store_true", dest="open_terminal")
   parser.add_argument("-f", "--folder-in-terminal", action="store_true", dest="open_terminal")
+  parser.add_argument(
+    "-a",
+    "--application",
+    choices=sorted(PROJECT_APPLICATION_COMMANDS),
+    default=DEFAULT_PROJECT_APPLICATION,
+    dest="project_application",
+    help="Application used to open project files. Defaults to positron.",
+  )
   return parser
 
 
@@ -277,7 +313,14 @@ def run(argv: Optional[list[str]] = None) -> int:
     else:
       print("No projects are registered yet. Use 'launch register ...' first.", file=sys.stderr)
     return 1
-  return launch_project(project, args.open_project, args.open_shiny, args.open_github, args.open_terminal)
+  return launch_project(
+    project,
+    args.open_project,
+    args.open_shiny,
+    args.open_github,
+    args.open_terminal,
+    args.project_application,
+  )
 
 
 def main() -> None:

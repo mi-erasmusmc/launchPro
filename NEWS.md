@@ -1,5 +1,9 @@
 # News
 
+## 0.1.3
+
+- Added `--application` to choose `positron` or `rstudio` for project and Shiny launches, with `positron` as the default.
+
 ## 0.1.2
 
 - Fixed an issue where the `launch` command failed when installed from `main` due to a missing return statement in the parser builder.
