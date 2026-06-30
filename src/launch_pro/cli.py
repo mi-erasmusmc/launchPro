@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -13,6 +15,13 @@ from typing import Any, Dict, Optional
 APP_NAME = "launch_pro"
 PROJECTS_FILENAME = "projects.json"
 ENV_PROJECTS_FILE = "LAUNCH_PROJECTS_FILE"
+DEFAULT_PROJECT_APPLICATION = "positron"
+PROJECT_APPLICATION_COMMANDS = {
+  "positron": ("positron", "Positron"),
+  "rstudio": ("rstudio", "RStudio"),
+}
+LINUX_TERMINALS = ("gnome-terminal", "konsole", "xfce4-terminal", "alacritty", "kitty")
+MACOS_TERMINALS = ("Terminal", "iTerm2", "Alacritty")
 
 DEFAULT_PROJECTS: Dict[str, Dict[str, Optional[str]]] = {}
 
@@ -47,6 +56,7 @@ class Project:
   base_folder: Path
   shiny_folder: Optional[Path]
   github_url: str
+  default_app: Optional[str]
 
   @classmethod
   def from_dict(cls, name: str, payload: Dict[str, Any]) -> "Project":
@@ -56,6 +66,7 @@ class Project:
       base_folder=expand_path(payload["base_folder"]),
       shiny_folder=expand_path(shiny_folder) if shiny_folder else None,
       github_url=payload["github_url"],
+      default_app=payload.get("default_app"),
     )
 
   def to_dict(self) -> Dict[str, Optional[str]]:
@@ -63,6 +74,7 @@ class Project:
       "base_folder": str(self.base_folder),
       "shiny_folder": str(self.shiny_folder) if self.shiny_folder else None,
       "github_url": self.github_url,
+      "default_app": self.default_app,
     }
 
 
@@ -103,6 +115,35 @@ def open_target(target: str) -> None:
   subprocess.run(["xdg-open", target], check=True)
 
 
+def project_application_command(application: str) -> list[str]:
+  candidates = PROJECT_APPLICATION_COMMANDS.get(application)
+  if not candidates:
+    raise ValueError(f"Unsupported project application: {application}")
+  if sys.platform == "darwin":
+    return ["open", "-a", candidates[-1]]
+  for candidate in candidates:
+    executable = shutil.which(candidate)
+    if executable:
+      return [executable]
+  raise ValueError(f"Could not find the {application} executable in PATH")
+
+
+def open_project_target(target: Path, application: str) -> None:
+  subprocess.run([*project_application_command(application), str(target)], check=True)
+
+
+def resolve_project_application(project: Project, requested_app: Optional[str]) -> str:
+  return requested_app or project.default_app or DEFAULT_PROJECT_APPLICATION
+
+
+def resolve_project_target(target_folder: Path, label: str, application: str) -> Path:
+  if application == "positron":
+    if not target_folder.is_dir():
+      raise ValueError(f"Could not find {label} folder at {target_folder}")
+    return target_folder.resolve()
+  return resolve_rproj(target_folder, label)
+
+
 def resolve_rproj(target_folder: Path, label: str) -> Path:
   if not target_folder.is_dir():
     raise ValueError(f"Could not find {label} folder at {target_folder}")
@@ -114,68 +155,147 @@ def resolve_rproj(target_folder: Path, label: str) -> Path:
   return project_files[0]
 
 
-def open_terminal(target_folder: Path) -> None:
-  """Opens the target folder in a terminal window (attempting to use the current one)."""
+def shell_cd_command(target_folder: Path) -> str:
+  return f"cd {shlex.quote(str(target_folder.resolve()))}"
+
+
+def apple_script_string(value: str) -> str:
+  return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def run_osascript(script: str, capture_output: bool = False) -> subprocess.CompletedProcess[str]:
+  return subprocess.run(
+    ["osascript", "-e", script],
+    check=True,
+    capture_output=capture_output,
+    text=capture_output,
+  )
+
+
+def frontmost_macos_application() -> str:
+  script = 'tell application "System Events" to get name of first application process whose frontmost is true'
+  result = run_osascript(script, capture_output=True)
+  app_name = result.stdout.strip()
+  if not app_name:
+    raise ValueError("Could not determine the active macOS application")
+  return app_name
+
+
+def normalize_macos_application_name(app_name: str) -> str:
+  return app_name.strip().casefold()
+
+
+def open_terminal_macos_terminal(target_folder: Path) -> None:
+  command = apple_script_string(shell_cd_command(target_folder))
+  script = (
+    'tell application "Terminal"\n'
+    "activate\n"
+    "if not (exists front window) then reopen\n"
+    f'do script "{command}" in selected tab of front window\n'
+    "end tell"
+  )
+  run_osascript(script)
+
+
+def open_terminal_macos_iterm2(target_folder: Path) -> None:
+  command = apple_script_string(shell_cd_command(target_folder))
+  script = (
+    'tell application "iTerm2"\n'
+    "activate\n"
+    "if not (exists current window) then create window with default profile\n"
+    f'tell current session of current window to write text "{command}"\n'
+    "end tell"
+  )
+  run_osascript(script)
+
+
+def open_terminal_macos_alacritty(target_folder: Path) -> None:
+  command = apple_script_string(shell_cd_command(target_folder))
+  script = (
+    'tell application "Alacritty" to activate\n'
+    'tell application "System Events"\n'
+    f'keystroke "{command}"\n'
+    "key code 36\n"
+    "end tell"
+  )
+  try:
+    run_osascript(script)
+  except subprocess.CalledProcessError:
+    subprocess.run(
+      ["alacritty", "msg", "create-window", "--working-directory", str(target_folder.resolve())],
+      check=True,
+    )
+
+
+def open_terminal_macos(target_folder: Path) -> None:
+  app_name = frontmost_macos_application()
+  normalized_name = normalize_macos_application_name(app_name)
+  if normalized_name == "terminal":
+    open_terminal_macos_terminal(target_folder)
+    return
+  if normalized_name == "iterm2":
+    open_terminal_macos_iterm2(target_folder)
+    return
+  if normalized_name == "alacritty":
+    open_terminal_macos_alacritty(target_folder)
+    return
+  supported = ", ".join(MACOS_TERMINALS)
+  raise ValueError(
+    f"Active macOS application '{app_name}' is not a supported terminal for -t. "
+    f"Supported terminals: {supported}"
+  )
+
+
+def open_terminal_windows(target_folder: Path) -> None:
   target_str = str(target_folder.resolve())
+  wt_path = subprocess.run(["where", "wt.exe"], capture_output=True, text=True).stdout.strip()
+  if wt_path:
+    subprocess.run(["wt.exe", "-d", target_str], check=True)
+    return
+  subprocess.run(["cmd", "/c", "start", "cmd", "/K", f'cd /d "{target_str}"'], check=True)
+
+
+def open_terminal_linux(target_folder: Path) -> None:
+  target_str = str(target_folder.resolve())
+  for term in LINUX_TERMINALS:
+    try:
+      subprocess.run([term, "--working-directory", target_str], check=True)
+      return
+    except (FileNotFoundError, subprocess.CalledProcessError):
+      continue
+  print(
+    f"Warning: Could not find a compatible terminal from {list(LINUX_TERMINALS)}.",
+    file=sys.stderr,
+  )
+
+
+def open_terminal(target_folder: Path) -> None:
+  """Open the target folder in the current terminal app when possible."""
   if sys.platform == "darwin":
-    # macOS: Try to hijack the frontmost window in Terminal or iTerm2
-    # 1. Try Terminal.app
-    try:
-      script = f'tell application "Terminal" to do script "cd \'{target_str}\'" in front window'
-      subprocess.run(["osascript", "-e", script], check=True)
-      return
-    except (subprocess.CalledProcessError, FileNotFoundError):
-      pass
-
-    # 2. Try iTerm2
-    try:
-      script = f'tell application "iTerm2" to tell current session of front window to write text "cd \'{target_str}\'"'
-      subprocess.run(["osascript", "-e", script], check=True)
-      return
-    except (subprocess.CalledProcessError, FileNotFoundError):
-      pass
-
-    # 3. Fallback to new window
-    script = f'tell application "Terminal" to do script "cd \'{target_str}\'"'
-    subprocess.run(["osascript", "-e", script], check=True)
-
-  elif os.name == "nt":
-    # Windows: Try Windows Terminal (wt.exe) if available, else fallback to cmd
-    wt_path = subprocess.run(["where", "wt.exe"], capture_output=True, text=True).stdout.strip()
-    if wt_path:
-      subprocess.run(["wt.exe", "-d", target_str], check=True)
-    else:
-      # Fallback to default cmd window
-      subprocess.run(["cmd", "/c", "start", "cmd", "/K", f"cd /d \"{target_str}\""],
-                     check=True)
-  else:
-    # Linux: Iterate through a list of common terminals
-    terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "alacritty", "kitty"]
-    success = False
-    for term in terminals:
-      try:
-        subprocess.run([term, "--working-directory", target_str], check=True)
-        success = True
-        break
-      except (FileNotFoundError, subprocess.CalledProcessError):
-        continue
-
-    if not success:
-      print(f"Warning: Could not find a compatible terminal from {terminals}.",
-            file=sys.stderr)
+    open_terminal_macos(target_folder)
+    return
+  if os.name == "nt":
+    open_terminal_windows(target_folder)
+    return
+  open_terminal_linux(target_folder)
 
 
 
-def launch_project(project: Project, open_project: bool, open_shiny: bool, open_github: bool, should_open_terminal: bool) -> int:
+def launch_project(project: Project,
+                   open_project: bool,
+                   open_shiny: bool,
+                   open_github: bool,
+                   should_open_terminal: bool,
+                   project_application: str) -> int:
   status = 0
   if not any([open_project, open_shiny, open_github, should_open_terminal]):
     open_project = True
 
   if open_project:
     try:
-      rproj = resolve_rproj(project.base_folder, "project")
-      print(f"Launching {project.name} project")
-      open_target(str(rproj))
+      target = resolve_project_target(project.base_folder, "project", project_application)
+      print(f"Launching {project.name} project in {project_application}")
+      open_project_target(target, project_application)
     except Exception as exc:
       print(f"Error: {exc}", file=sys.stderr)
       status = 1
@@ -184,9 +304,9 @@ def launch_project(project: Project, open_project: bool, open_shiny: bool, open_
     try:
       if not project.shiny_folder:
         raise ValueError(f"No shiny project configured for {project.name}")
-      rproj = resolve_rproj(project.shiny_folder, "shiny project")
-      print(f"Launching {project.name} shiny project")
-      open_target(str(rproj))
+      target = resolve_project_target(project.shiny_folder, "shiny project", project_application)
+      print(f"Launching {project.name} shiny project in {project_application}")
+      open_project_target(target, project_application)
     except Exception as exc:
       print(f"Error: {exc}", file=sys.stderr)
       status = 1
@@ -221,6 +341,14 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument("-g", "--github", action="store_true", dest="open_github")
   parser.add_argument("-t", "--terminal", action="store_true", dest="open_terminal")
   parser.add_argument("-f", "--folder-in-terminal", action="store_true", dest="open_terminal")
+  parser.add_argument(
+    "-a",
+    "--app",
+    choices=sorted(PROJECT_APPLICATION_COMMANDS),
+    default=None,
+    dest="project_application",
+    help="Application used to open project files. Defaults to the registered app or positron.",
+  )
   return parser
 
 
@@ -234,6 +362,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("base_folder")
     parser.add_argument("shiny_folder", help="Use '-' when the project has no Shiny folder.")
     parser.add_argument("github_url")
+    parser.add_argument(
+      "--app",
+      choices=sorted(PROJECT_APPLICATION_COMMANDS),
+      dest="default_app",
+      help="Default application for this project.",
+    )
     namespace = parser.parse_args(argv[1:])
     namespace.command = "register"
     return namespace
@@ -254,6 +388,7 @@ def register_project(registry: ProjectRegistry, args: argparse.Namespace) -> int
     base_folder=expand_path(args.base_folder),
     shiny_folder=shiny_folder,
     github_url=args.github_url,
+    default_app=args.default_app,
   )
   projects[project.name] = project
   registry.save(projects)
@@ -277,7 +412,15 @@ def run(argv: Optional[list[str]] = None) -> int:
     else:
       print("No projects are registered yet. Use 'launch register ...' first.", file=sys.stderr)
     return 1
-  return launch_project(project, args.open_project, args.open_shiny, args.open_github, args.open_terminal)
+  project_application = resolve_project_application(project, args.project_application)
+  return launch_project(
+    project,
+    args.open_project,
+    args.open_shiny,
+    args.open_github,
+    args.open_terminal,
+    project_application,
+  )
 
 
 def main() -> None:
