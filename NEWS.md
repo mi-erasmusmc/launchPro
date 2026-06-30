@@ -1,5 +1,10 @@
 # News
 
+## 0.1.3
+
+- Added `--app` to choose `positron` or `rstudio` for project and Shiny launches.
+- Added project registration support for saving a per-project default app, with `positron` as the fallback when none is configured.
+
 ## 0.1.2
 
 - Fixed an issue where the `launch` command failed when installed from `main` due to a missing return statement in the parser builder.
