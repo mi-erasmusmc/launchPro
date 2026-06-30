@@ -1,4 +1,5 @@
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -134,6 +135,131 @@ class CliApplicationTests(unittest.TestCase):
 
       self.assertEqual(status, 0)
       self.assertEqual(commands[0], self.expected_command("rstudio", rproj_path.resolve()))
+
+  def test_open_terminal_uses_frontmost_terminal_on_macos(self) -> None:
+    target = Path("/tmp/demo project")
+    scripts = []
+
+    def fake_run(command, check=True, capture_output=False, text=False, **kwargs):
+      scripts.append(command)
+      if len(scripts) == 1:
+        return subprocess.CompletedProcess(command, 0, stdout="Terminal\n")
+      return subprocess.CompletedProcess(command, 0, stdout="")
+
+    with patch.object(cli.sys, "platform", "darwin"):
+      with patch.object(cli.subprocess, "run", side_effect=fake_run):
+        cli.open_terminal(target)
+
+    expected_cd = cli.apple_script_string(cli.shell_cd_command(target))
+    self.assertEqual(
+      scripts,
+      [
+        [
+          "osascript",
+          "-e",
+          'tell application "System Events" to get name of first application process whose frontmost is true',
+        ],
+        [
+          "osascript",
+          "-e",
+          'tell application "Terminal"\n'
+          "activate\n"
+          "if not (exists front window) then reopen\n"
+          f'do script "{expected_cd}" in selected tab of front window\n'
+          "end tell",
+        ],
+      ],
+    )
+
+  def test_open_terminal_uses_alacritty_fallback_without_terminal_app(self) -> None:
+    target = Path("/tmp/demo project")
+    commands = []
+
+    def fake_run(command, check=True, capture_output=False, text=False, **kwargs):
+      commands.append(command)
+      if len(commands) == 1:
+        return subprocess.CompletedProcess(command, 0, stdout="Alacritty\n")
+      if len(commands) == 2:
+        raise subprocess.CalledProcessError(1, command)
+      return subprocess.CompletedProcess(command, 0, stdout="")
+
+    with patch.object(cli.sys, "platform", "darwin"):
+      with patch.object(cli.subprocess, "run", side_effect=fake_run):
+        cli.open_terminal(target)
+
+    expected_cd = cli.apple_script_string(cli.shell_cd_command(target))
+    self.assertEqual(
+      commands,
+      [
+        [
+          "osascript",
+          "-e",
+          'tell application "System Events" to get name of first application process whose frontmost is true',
+        ],
+        [
+          "osascript",
+          "-e",
+          'tell application "Alacritty" to activate\n'
+          'tell application "System Events"\n'
+          f'keystroke "{expected_cd}"\n'
+          "key code 36\n"
+          "end tell",
+        ],
+        [
+          "alacritty",
+          "msg",
+          "create-window",
+          "--working-directory",
+          str(target.resolve()),
+        ],
+      ],
+    )
+
+  def test_open_terminal_accepts_lowercase_alacritty_on_macos(self) -> None:
+    target = Path("/tmp/demo project")
+    commands = []
+
+    def fake_run(command, check=True, capture_output=False, text=False, **kwargs):
+      commands.append(command)
+      if len(commands) == 1:
+        return subprocess.CompletedProcess(command, 0, stdout="alacritty\n")
+      return subprocess.CompletedProcess(command, 0, stdout="")
+
+    with patch.object(cli.sys, "platform", "darwin"):
+      with patch.object(cli.subprocess, "run", side_effect=fake_run):
+        cli.open_terminal(target)
+
+    expected_cd = cli.apple_script_string(cli.shell_cd_command(target))
+    self.assertEqual(
+      commands,
+      [
+        [
+          "osascript",
+          "-e",
+          'tell application "System Events" to get name of first application process whose frontmost is true',
+        ],
+        [
+          "osascript",
+          "-e",
+          'tell application "Alacritty" to activate\n'
+          'tell application "System Events"\n'
+          f'keystroke "{expected_cd}"\n'
+          "key code 36\n"
+          "end tell",
+        ],
+      ],
+    )
+
+  def test_open_terminal_rejects_unsupported_macos_terminal(self) -> None:
+    target = Path("/tmp/demo")
+
+    def fake_run(command, check=True, capture_output=False, text=False, **kwargs):
+      return subprocess.CompletedProcess(command, 0, stdout="Warp\n")
+
+    with patch.object(cli.sys, "platform", "darwin"):
+      with patch.object(cli.subprocess, "run", side_effect=fake_run):
+        with self.assertRaisesRegex(ValueError, "Warp"):
+          cli.open_terminal(target)
 
   def expected_command(self, application: str, rproj_path: Path) -> list[str]:
     if cli.sys.platform == "darwin":
